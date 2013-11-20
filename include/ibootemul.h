@@ -65,9 +65,4 @@ extern int command_halt(int argc, char* argv[]);
 extern int command_memorytest(int argc, char **argv);
 extern void command_prompt(void);
 
-/* Nvram. */
-extern int nvram_init(void);
-extern int nvram_set_variable(char* env, char* string);
-extern char* nvram_get_variable(char* env);
-
 #endif

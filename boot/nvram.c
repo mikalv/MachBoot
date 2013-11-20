@@ -1,17 +1,18 @@
 /*
  * Copyright 2013, winocm. <winocm@icloud.com>
+ * Copyright 2013, Brian McKenzie <mckenzba@gmail.com>
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
- * 
+ *
  *   Redistributions of source code must retain the above copyright notice, this
  *   list of conditions and the following disclaimer.
- * 
+ *
  *   Redistributions in binary form must reproduce the above copyright notice, this
  *   list of conditions and the following disclaimer in the documentation and/or
  *   other materials provided with the distribution.
- * 
+ *
  *   If you are going to use this software in any form that does not involve
  *   releasing the source to this project or improving it, let me know beforehand.
  *
@@ -29,18 +30,12 @@
 
 #include "genboot.h"
 
-typedef struct _nvram_variable {
-    char name[64];
-    char setting[256];
-    int overridden;
-} nvram_variable_t;
-
-extern nvram_variable_t gNvramVariables[];
-
 #define xstr(s) #s
 #define str(s) xstr(s)
 
-nvram_variable_t gNvramVariables[] = {
+nvram_variable_list_t *gNvramVariables;
+
+nvram_variable_t gNvramDefaultVariables[] = {
     {"build-style",         str(BUILD_STYLE), 0},
     {"build-version",       str(BUILD_TAG), 0},
     {"config_board",        str(BUILD_PLATFORM), 0},
@@ -57,88 +52,173 @@ nvram_variable_t gNvramVariables[] = {
     {"framebuffer",         str(FRAMEBUFFER_ADDRESS), 0},
     {"secure-boot",         "0x0", 0},
     {"filesize", "0x0", 0},
-    {"", "", 0xff},
 };
 
-int nvram_init(void)
+/**
+ * nvram_initialize_list
+ *
+ * Initialize linked list to contain nvram variable data.
+ */
+nvram_variable_list_t *nvram_initialize_list(void)
 {
+    nvram_variable_list_t *list = malloc(sizeof(nvram_variable_list_t));
+    list->head = NULL;
+    list->tail = &list->head;
+
+    return list;
+}
+
+/**
+ * nvram_init
+ *
+ * Populate nvram with initial values.
+ */
+int nvram_init(nvram_variable_t vars[], size_t size) {
+    int i;
+
+    gNvramVariables = nvram_initialize_list();
+
+    for (i = 0; i <= size; i++) {
+        nvram_variable_set(gNvramVariables, vars[i].name, vars[i].setting);
+    }
+
     return 0;
 }
 
-int nvram_set_variable(char* env, char* string) {
-    int i = 0;
-    char* p;
+/**
+ * nvram_create_node
+ *
+ * Create a node to be inserted into linked list.
+ */
+nvram_variable_node_t *nvram_create_node(const char *name, const char *setting, int overridden)
+{
+    nvram_variable_node_t *node = malloc(sizeof(nvram_variable_node_t));
 
-    /* xxx */
-    while((p = strchr(string, '"')) != NULL)
-        *p = ' ';
-    
-    /* Set if in NvramVars. */
-    while(gNvramVariables[i].overridden != 0xff) {
-        if(strlen(env) > 64)
-            env[63] = '\0';
-        if(strncmp(env, gNvramVariables[i].name, 64) == 0) {
-            bzero(gNvramVariables[i].setting, 256);
-            strncpy(gNvramVariables[i].setting, string, 255);
-            gNvramVariables[i].overridden = 1;
+    node->next = NULL;
+    strncpy(node->value.name, name, 63);
+    strncpy(node->value.setting, setting, 255);
+    node->value.overridden = overridden;
+
+    return node;
+}
+
+/**
+ * nvram_append_node
+ *
+ * Append a node to the end of the linked list.
+ */
+void nvram_append_node(nvram_variable_list_t *list, nvram_variable_node_t *node)
+{
+    *list->tail = node;
+    list->tail = &node->next;
+    node->next = NULL;
+}
+
+/**
+ * nvram_remove_node
+ *
+ * Remove a node from the linked list.
+ */
+void nvram_remove_node(nvram_variable_list_t *list, nvram_variable_node_t *node)
+{
+    nvram_variable_node_t *current;
+    nvram_variable_node_t **next = &list->head;
+
+    while ((current = *next) != NULL) {
+        if (current == node) {
+            *next = node->next;
+
+            if (list->tail == &node->next)
+                list->tail = next;
+
+            node->next = NULL;
+            break;
+        }
+        next = &current->next;
+    }
+}
+
+/**
+ * nvram_variable_set
+ *
+ * Add/override an vnram variable.
+ */
+void nvram_variable_set(nvram_variable_list_t *list, const char *name, const char *setting)
+{
+    nvram_variable_node_t *node;
+
+    nvram_variable_node_t *current = list->head;
+
+    while (current != NULL) {
+        if (strcmp(current->value.name, name) == 0) {
+            bzero(current->value.name, 63);
+            bzero(current->value.setting, 255);
+            strncpy(current->value.name, name, 63);
+            strncpy(current->value.setting, setting, 255);
+            current->value.overridden = 1;
+
+            return;
+        }
+        current = current->next;
+    }
+
+    node = nvram_create_node(name, setting, 0);
+    nvram_append_node(list, node);
+}
+
+/**
+ * nvram_variable_unset
+ *
+ * Unset/erase an nvram variable.
+ */
+int nvram_variable_unset(nvram_variable_list_t *list, const char *name)
+{
+    nvram_variable_node_t *current = list->head;
+
+    while (current != NULL) {
+        if (strcmp(current->value.name, name) == 0) {
+            nvram_remove_node(list, current);
             return 0;
         }
-        i++;
+
+        current = current->next;
     }
-    
-    /* Todo, add the thing to a list if it's user specified, IE: platform-uuid */
-    return 0;
+
+    return -1;
 }
 
-char* nvram_get_variable(char* env) {
-    int i = 0;
- 
-    /* Set if in gNvramVars */
-    while(gNvramVariables[i].overridden != 0xff) {
-        if(strlen(env) > 64)
-            env[63] = '\0';
-        if(strncmp(env, gNvramVariables[i].name, strlen(env)) == 0) {
-            return gNvramVariables[i].setting;
-        }
-        i++;
+/**
+ * nvram_read_variable_info
+ *
+ * Retrieve information about an nvram variable (such as it's value or if it's been modified).
+ */
+nvram_variable_t nvram_read_variable_info(nvram_variable_list_t *list, const char *name)
+{
+    nvram_variable_t value;
+
+    nvram_variable_node_t *current = list->head;
+
+    while (current != NULL) {
+        if (strcmp(current->value.name, name) == 0)
+            value = current->value;
+
+        current = current->next;
     }
-    
-    /* Todo, add the thing to a list if it's user specified, IE: platform-uuid */
-    return 0;
+
+    return value;
 }
 
-int command_setenv(int argc, char* argv[]) {
-    if(argc != 2) {
-        printf("usage: setenv <var> <string>\n");
-        return -1;
-    }
-    nvram_set_variable(argv[1], argv[2]);
-    return 0;
-}
+/**
+ * nvram_dump_list
+ *
+ * Dump a list of all variables in nvram and their associated values and states.
+ */
+void nvram_dump_list(nvram_variable_list_t *list)
+{
+    nvram_variable_node_t *current = list->head;
 
-int command_getenv(int argc, char* argv[]) {
-    if(argc != 1) {
-        printf("usage: getenv <var>\n");
-        return -1;
+    while (current != NULL) {
+        printf("%s %s = %s\n", (current->value.overridden ? "P" : " "), current->value.name, current->value.setting);
+        current = current->next;
     }
-    printf("%s\n", nvram_get_variable(argv[1]));
-    return 0;
 }
-
-int command_printenv(int argc, char* argv[]) {
-    if(argv[1]) {
-        if(nvram_get_variable(argv[1]))
-            printf("%s = '%s'\n", argv[1], nvram_get_variable(argv[1]));
-        return 0;
-    } else {
-        // xxx todo, fix for other settings
-        int i = 0;
-        while(gNvramVariables[i].overridden != 0xff) {
-            printf("%s %s = '%s'\n", gNvramVariables[i].overridden ? "P" : "", gNvramVariables[i].name, gNvramVariables[i].setting);
-            i++;
-        }
-    }
-    
-    return 0;
-}
-

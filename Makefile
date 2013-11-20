@@ -30,7 +30,9 @@ OBJECTS		= \
 	drivers/rv_init.o lib/memorytester/mt.o lib/memorytester/tests.o lib/crc32.o lib/crypto/sha1.o \
 	lib/iboot_image.o lib/stb_image.o lib/core/stack_protector.o \
 	lib/hfs/cache.o lib/hfs/hfs.o lib/hfs/hfs_compare.o lib/hfs/sys.o lib/hfssup.o \
-	lib/kernelcache.o
+	lib/kernelcache.o \
+	mach.o xmdt.o
+
 CFLAGS		= -mcpu=cortex-a8 -std=c99 -fno-builtin -Os -fPIC -Wall -Werror -Wno-error=multichar -Wno-multichar -Wno-error=unused-function -mapcs-frame \
 		-fstack-protector-all -Wno-error=strict-aliasing
 CPPFLAGS	= -Iinclude -D__LITTLE_ENDIAN__ -DTEXT_BASE=$(TEXT_BASE) -DBUILD_STYLE="$(BUILD_STYLE)" \
@@ -44,6 +46,7 @@ LDFLAGS		= -nostdlib -Wl,-Tldscript.ld
 CROSS		= arm-none-eabi-
 CC		= $(CROSS)gcc
 AS		= $(CROSS)gcc
+LD		= $(CROSS)ld
 OBJCOPY		= $(CROSS)objcopy
 TARGET		= SampleBooter.elf
 
@@ -51,16 +54,24 @@ SIZE		= 32768
 
 all: dirs $(TARGET) $(OBJECTS)
 
+mach.o: blobs/mach.img3
+	$(LD) -r -b binary -o mach.o blobs/mach.img3
+	$(OBJCOPY) --rename-section .data=.kernel mach.o mach.o
+
+xmdt.o: blobs/xmdt.img3
+	$(LD) -r -b binary -o xmdt.o blobs/xmdt.img3
+	$(OBJCOPY) --rename-section .data=.devicetree xmdt.o xmdt.o
+
 .PHONY: dirs
 dirs:
-#	mkdir -p $(OBJROOT) $(SYMROOT) $(DSTROOT) 
+#	mkdir -p $(OBJROOT) $(SYMROOT) $(DSTROOT)
 
-$(TARGET): $(OBJECTS)
+$(TARGET): $(OBJECTS) mach.o xmdt.o
 	scripts/version.sh lib/version.S $(BUILD_PRODUCT) $(BUILD_PLATFORM) $(BUILD_STYLE) $(BUILD_TAG)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o lib/version.o lib/version.S
 	$(CC) $(LDFLAGS) $(OBJECTS) lib/version.o -o $(TARGET)  -lgcc 
 	$(OBJCOPY) -g -S -O binary $(TARGET) $(TARGET).raw
-#	mkimage -A arm -O linux -T kernel -C none -a $(TEXT_BASE) -e 0x80000040 -n "Linux 2.6" -d $(TARGET).raw $(TARGET).uImage
+	mkimage -A arm -O linux -T kernel -C none -a $(TEXT_BASE) -e $(TEXT_BASE) -n "$(BUILD_TAG)" -d $(TARGET).raw $(TARGET).uImage
 #	rm -f $(TARGET) $(TARGET).raw
 
 %.o: %.S
@@ -70,4 +81,4 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(TARGET)* $(OBJECTS) $(OBJROOT)/version.o
+	rm -f $(TARGET)* $(OBJECTS) $(OBJROOT)/version.o mach.o xmdt.o
