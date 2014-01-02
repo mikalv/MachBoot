@@ -31,20 +31,44 @@
 #include <stdarg.h>
 
 /* Uart stuff */
-#define AMBA_UART_DR(base)      (*(volatile unsigned char *)((base) + 0x00))
-#define AMBA_UART_LCRH(base)    (*(volatile unsigned char *)((base) + 0x2c))
-#define AMBA_UART_CR(base)      (*(volatile unsigned char *)((base) + 0x30))
-#define AMBA_UART_FR(base)      (*(volatile unsigned char *)((base) + 0x18))
+#define HwReg(x) *((volatile unsigned long*)(x))
+uint32_t gS5L8930XUartBase = 0x82500000;
 
-#define REALVIEW_PBA8_SDRAM6_BASE               0x70000000  /* SDRAM bank 6 256MB */
-#define REALVIEW_PBA8_SDRAM7_BASE               0x80000000  /* SDRAM bank 7 256MB */
-#define REALVIEW_PBA8_UART0_BASE                0x10009000  /* UART 0 */
+#define UART_CLOCKGATE                      0x30
+#define UART_CLOCK_SELECTION_MASK         (0x3 << 10)
+#define UART_CLOCK_SELECTION_SHIFT         10
+#define UART_DIVVAL_MASK                         0x0000FFFF
+#define UART_SAMPLERATE_MASK                 0x00030000
+#define UART_SAMPLERATE_SHIFT                 16
+#define UART_UCON_RXMODE_SHIFT                 0
+#define UART_UCON_TXMODE_SHIFT                 2
+#define UART_8BITS                                         3
+#define UART_FIFO_RESET_TX                         4
+#define UART_FIFO_RESET_RX                         2
+#define UART_FIFO_ENABLE                         1
 
-#define UART_FR_TXFE (1 << 7)
-#define UART_FR_TXFF (1 << 5)
+#define UART_UCON_MODE_IRQORPOLL         1
 
-#define UART_FR_RXFE (1 << 4)
-#define UART_FR_RXFF (1 << 6)
+#define ULCON      0x0000 /* Line Control             */
+#define UCON       0x0004 /* Control                  */
+#define UFCON      0x0008 /* FIFO Control             */
+#define UMCON      0x000C /* Modem Control            */
+#define UTRSTAT    0x0010 /* Tx/Rx Status             */
+#define UERSTAT    0x0014 /* UART Error Status        */
+#define UFSTAT     0x0018 /* FIFO Status              */
+#define UMSTAT     0x001C /* Modem Status             */
+#define UTXH       0x0020 /* Transmit Buffer          */
+#define URXH       0x0024 /* Receive Buffer           */
+#define UBRDIV     0x0028 /* Baud Rate Divisor        */
+#define UFRACVAL   0x002C /* Divisor Fractional Value */
+#define UINTP      0x0030 /* Interrupt Pending        */
+#define UINTSP     0x0034 /* Interrupt Source Pending */
+#define UINTM      0x0038 /* Interrupt Mask           */
+
+#define UART_UFSTAT_TXFIFO_FULL                        (0x1 << 9)
+#define UART_UFSTAT_RXFIFO_FULL                        (0x1 << 8)
+#define UART_UTRSTAT_TRANSMITTEREMPTY         0x4
+#define UART_UMSTAT_CTS                                 0x1
 
 #define barrier()               __asm__ __volatile__("": : :"memory");
 
@@ -53,35 +77,34 @@
  *
  * Put a character to the system console.
  */
-uint32_t uart_base = 0x10009000;
-static int inited_printf = 1;
 void uart_putchar(int c)
 {
-    if (!inited_printf)
-        return;
-
-    if (c == '\n')
+    if(c == '\n')
         uart_putchar('\r');
 
-    while (AMBA_UART_FR(uart_base) & UART_FR_TXFF) {
-        /* Transmit FIFO full, wait */
+    /*
+     * Wait for FIFO queue to empty. 
+     */
+    while (HwReg(gS5L8930XUartBase + UFSTAT) & UART_UFSTAT_TXFIFO_FULL)
         barrier();
-    }
 
-    AMBA_UART_DR(uart_base) = c;
+    HwReg(gS5L8930XUartBase + UTXH) = c;
+    return;
 }
 
-/**
- * uart_getc
- *
- * Get a character from system input.
- */
 int uart_getchar(void)
 {
-    while (AMBA_UART_FR(uart_base) & UART_FR_RXFE) {
-        /* Receive FIFO full, wait */
-        barrier();
-    }
+    /*
+     * Wait for a character. 
+     */
+    uint32_t ufstat = HwReg(gS5L8930XUartBase + UFSTAT);
+    int can_read = 0;
 
-    return AMBA_UART_DR(uart_base);
+    can_read = (ufstat & UART_UFSTAT_RXFIFO_FULL) | (ufstat & 0xF);
+    if(can_read)
+        return HwReg(gS5L8930XUartBase + URXH);
+    else
+        return -1;
+
+    return -1;
 }

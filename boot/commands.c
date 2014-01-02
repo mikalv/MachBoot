@@ -254,169 +254,66 @@ int command_sha1(int argc, char* argv[])
     return 0;
 }
 
-/* Setpicture */
-int command_setpicture(int argc, char* argv[])
-{
-    uint32_t addr = LOADADDR;
-    if(argc > 2) {
-        printf("usage: %s [address]\n", argv[0]);
+
+void hexdump(unsigned char* buf, unsigned int len) {
+        int i, j;
+        printf("0x%08x: ", buf);
+        for (i = 0; i < len; i++) {
+                if (i % 16 == 0 && i != 0) {
+                        for (j=i-16; j < i; j++) {
+                                unsigned char car = buf[j];
+                                if (car < 0x20 || car > 0x7f) car = '.';
+                                printf("%c", car);
+                        }
+                        printf("\n0x%08x: ", buf+i);
+                }
+                printf("%02x ", buf[i]);
+        }
+
+        int done = (i % 16);
+        int remains = 16 - done;
+        if (done > 0) {
+                for (j = 0; j < remains; j++) {
+                        printf("   ");
+                }
+        }
+
+        if ((i - done) >= 0) {
+                if (done == 0 && i > 0) done = 16;
+                for (j = (i - done); j < i; j++) {
+                        unsigned char car = buf[j];
+                        if (car < 0x20 || car > 0x7f) car = '.';
+                        printf("%c", car);
+                }
+        }
+
+        printf("\n\n");
+}
+
+int command_hexdump(int argc, char* argv[]) {
+    uint32_t addr = 0, len = 0;
+    if(argc != 2) {
+        printf("not enough arguments\n"
+               "usage: hexdump <address> <len>\n");
         return -1;
     }
-    if(argv[1])
-        addr = strtoul(argv[1], NULL, 16);
+    addr = strtoul(argv[1], NULL, 16);
+    len = strtoul(argv[2], NULL, 10);
 
-    if(!permissions_range_check(addr)) {
-        printf("Permission Denied\n");
-        return -1;
-    }
+        hexdump((unsigned char*)addr, len);
 
-    load_iboot_image((uint32_t*)addr, 'recm');
-    return 0;
+        return 0;
 }
 
 /* Bootx. */
 void *gKernelImage = NULL, *gDeviceTreeImage = NULL;
 uint32_t gKernelSize;
 
-int command_bootx(int argc, char* argv[]) {
-    uint32_t decomp_addr = KERNELCACHE_LOADADDR, comp_addr = LOADADDR;
-    uint32_t image_tag, out_size, kernel_image;
-
-    if(argv[1])
-        comp_addr = strtoul(argv[1], NULL, 16);
-
-    if(!permissions_range_check(comp_addr)) {
-        printf("Permission Denied\n");
-        return -1;
-    }
-    
-    printf("loading kernelcache from %p to address %p\n", comp_addr, decomp_addr);
-
-    if(!image3_fast_get_type((void*)comp_addr, &image_tag)) {
-        return -1;
-    }
-
-    if(image_tag != kImage3TypeKernel)
-        return -1;
-
-    assert(image3_validate_image((void*)comp_addr));
-    assert(image3_get_tag_data((void*)comp_addr, kImage3TagData, (void*)&kernel_image, &out_size));
-    
-    if(decompress_kernel((void*)kernel_image, (void*)decomp_addr) != 0) {
-        printf("Failed to decompress kernelcache\n");
-        return -1;
-    }
-
-    if(!gDeviceTreeImage) {
-        printf("Invalid device tree\n");
-        return -1;
-    }
-
-    start_darwin();
-
-    return 0;
-}
-
-/* DeviceTree/Ramdisk */
-int command_devicetree(int argc, char* argv[]) {
-    uint32_t devicetree_addr = LOADADDR, image_tag;
-    uint32_t devicetree_image, out_size;
-
-    if(argv[1])
-        devicetree_addr = strtoul(argv[1], NULL, 16);
-
-    if(!permissions_range_check(devicetree_addr)) {
-        printf("Permission Denied\n");
-        return -1;
-    }
-    
-    if(!image3_fast_get_type((void*)devicetree_addr, &image_tag)) {
-        return -1;
-    }
-
-    if(image_tag != kImage3TypeXmlDeviceTree)
-        return -1;
-
-    assert(image3_validate_image((void*)devicetree_addr));
-    assert(image3_get_tag_data((void*)devicetree_addr, kImage3TagData, (void*)&devicetree_image, &out_size));
-    
-    /* Copy it. */
-    printf("creating device tree at 0x%x of size 0x%x, from image at 0x%x\n",
-           DEVICETREE_LOADADDR, out_size, devicetree_addr);
-    bcopy((void*)devicetree_addr, (void*)DEVICETREE_LOADADDR, out_size);
-
-    gDeviceTreeImage = (void*)DEVICETREE_LOADADDR;
-    
-    return 0;
-}
-
-/* Set variables */
-int command_setenv(int argc, char* argv[]) {
-    if (argc == 0) {
-        printf("usage: setenv <var> <string>\n");
-        return -1;
-    }
-
-    if (argc == 1)
-        nvram_variable_unset(gNvramVariables, argv[1]);
-
-    if (argc == 2)
-        nvram_variable_set(gNvramVariables, argv[1], argv[2]);
-
-    return 0;
-}
-
-/* Read variables */
-int command_getenv(int argc, char* argv[]) {
-    nvram_variable_t var;
-
-    if(argc != 1) {
-        printf("usage: getenv <var>\n");
-        return -1;
-    }
-
-    var = nvram_read_variable_info(gNvramVariables, argv[1]);
-
-    if (strlen(var.name) > 0) {
-        printf("%s\n", var.setting);
-        return 0;
-    } else {
-        printf("no such variable: %s\n", argv[1]);
-        return -1;
-    }
-}
-
-/* Display all variables */
-int command_printenv(int argc, char* argv[]) {
-    nvram_variable_t var;
-
-    var = nvram_read_variable_info(gNvramVariables, argv[1]);
-
-    if(argv[1]) {
-        if (var.name != NULL) {
-            printf("%s = '%s'\n", var.name, var.setting);
-            return 0;
-        } else {
-            printf("no such variable: %s\n", argv[1]);
-            return -1;
-        }
-    } else {
-        nvram_dump_list(gNvramVariables);
-    }
-
-    return 0;
-}
-
 /* Command dispatch. */
 command_dispatch_t gDispatch[] = {
     {"help", command_help, "this list"},
     {"go", command_go, "jump directly to address"},
-    {"devicetree", command_devicetree, "create a device tree from the specified address"},
-    {"bootx", command_bootx, "boot a kernel cache at a specified address"},
     {"halt", command_halt, "halt the system (good for JTAG)"},
-    {"bgcolor", command_bgcolor, "set the display background color"},
-    {"setpicture", command_setpicture, "set the image on the display"},
-    {"memorytester", command_memorytest, "test a memory region"},
     {"mws", command_mws, "memory write - string"},
     {"mwb", command_mwb, "memory write - 8bit"},
     {"mwh", command_mwh, "memory write - 16bit"},
@@ -426,9 +323,7 @@ command_dispatch_t gDispatch[] = {
     {"md", command_md, "memory display - 32bit"},
     {"sha1", command_sha1, "SHA-1 hash of memory"},
     {"crc", command_crc, "POSIX 1003.2 checksum of memory"},
-    {"setenv", command_setenv, "set an environment variable"},
-    {"getenv", command_getenv, "get an environment variable over console"},
-    {"printenv", command_printenv, "print one or all environment variables"},    
+    {"hexdump", command_hexdump, "hex dump of memory"},
     {NULL, NULL, NULL},
 };
 

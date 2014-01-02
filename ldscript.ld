@@ -2,7 +2,7 @@
 OUTPUT_ARCH(arm)
 ENTRY(_start)
 
-__base = 0x8ff00000;
+__base = 0x41000000;
 
 SECTIONS
 {

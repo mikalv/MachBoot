@@ -1,8 +1,8 @@
 BUILD_TAG			= MachBoot-1.1 #$(shell git tag -l | tail -n 1)
 BUILD_STYLE			= DEVELOPMENT
 BUILD_PRODUCT		= MachBoot
-BUILD_PLATFORM		= RealView
-TEXT_BASE			= 0x8ff00000
+BUILD_PLATFORM		= S5L8930X
+TEXT_BASE			= 0x43000000
 FRAMEBUFFER_ADDRESS = 0x8f700000
 DRAM_BASE			= 0x70000000
 LOADADDR			= 0x70000000
@@ -21,20 +21,17 @@ OBJECTS		= \
 	arch/arm/start.o arch/arm/excvect.o arch/arm/semihost.o \
 	arch/arm/proc-armv.o arch/arm/traps.o arch/arm/cswitch.o arch/arm/crt/bcopy.o \
 	arch/arm/crt/bzero.o arch/arm/crt/strchr.o arch/arm/crt/strcmp.o \
-	arch/arm/crt/strlen.o arch/arm/crt/strncmp.o arch/arm/pmap.o \
-	arch/arm/thread.o arch/arm/crt/memset_pattern.o boot/bootx.o boot/main.o \
+	arch/arm/crt/strlen.o arch/arm/crt/strncmp.o \
+	arch/arm/thread.o arch/arm/crt/memset_pattern.o boot/main.o \
 	drivers/rv_uart.o lib/core/malloc.o lib/core/printf.o lib/core/tlsf.o \
-	lib/crt/libc_stub.o lib/device_tree.o lib/image3.o lib/json_parser.o lib/macho_loader.o \
-	lib/xml.o sys/debug.o sys/version.o sys/memory_region.o lib/lzss.o lib/adler32.o \
-	boot/permissions.o boot/commands.o boot/nvram.o boot/parser.o drivers/rv_framebuffer.o \
-	drivers/rv_init.o lib/memorytester/mt.o lib/memorytester/tests.o lib/crc32.o lib/crypto/sha1.o \
-	lib/iboot_image.o lib/stb_image.o lib/core/stack_protector.o \
-	lib/hfs/cache.o lib/hfs/hfs.o lib/hfs/hfs_compare.o lib/hfs/sys.o lib/hfssup.o \
-	lib/kernelcache.o \
-	mach.o xmdt.o
+	lib/crt/libc_stub.o lib/image3.o lib/macho_loader.o \
+	sys/debug.o sys/version.o sys/memory_region.o \
+	boot/permissions.o boot/commands.o boot/parser.o \
+	drivers/rv_init.o lib/crc32.o lib/crypto/sha1.o \
+	lib/core/stack_protector.o
 
 CFLAGS		= -mcpu=cortex-a8 -std=c99 -fno-builtin -Os -fPIC -Wall -Werror -Wno-error=multichar -Wno-multichar -Wno-error=unused-function -mapcs-frame \
-		-fstack-protector-all -Wno-error=strict-aliasing
+		-fstack-protector-all -Wno-error=strict-aliasing -ffunction-sections -fdata-sections -ffreestanding -fPIC
 CPPFLAGS	= -Iinclude -D__LITTLE_ENDIAN__ -DTEXT_BASE=$(TEXT_BASE) -DBUILD_STYLE="$(BUILD_STYLE)" \
 		  -DBUILD_TAG="$(BUILD_TAG)" -DBUILD_PRODUCT="$(BUILD_PRODUCT)" -DBUILD_PLATFORM="$(BUILD_PLATFORM)" \
 		  -Iarch/arm/include -DDRAM_BASE=$(DRAM_BASE) -DDRAM_SIZE=$(DRAM_SIZE) -D__arm__ -DARM \

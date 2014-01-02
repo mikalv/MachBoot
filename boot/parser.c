@@ -100,7 +100,7 @@ static void command_parse(char* str)
         x++;
     }
 
-    printf("?SYNTAX ERROR\n");
+    printf("\x1b[01m" "?SYNTAX ERROR" "\x1b[00m" "\n");
 
     return;
 }
@@ -125,6 +125,8 @@ static void safe_gets(char *mod, char *str, int maxlen)
 	for (;;) {
 	    c = uart_getchar();
 	    switch (c) {
+    case -1:
+      continue;
 		case '\n':
 		case '\r':
 		    printf("\n");

@@ -33,7 +33,7 @@
 .section .bl_title,"aS"
 .globl _bl_title
 _bl_title:
-    .asciz "MachBoot for RealView, Copyright 2013, winocm."
+    .asciz "MachBoot for S5L8930X, Copyright 2013, winocm."
     .align 4
 
 .section .bl_build,"aS"

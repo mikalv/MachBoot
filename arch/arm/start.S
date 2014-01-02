@@ -39,6 +39,150 @@
 .section .reset,"ax"
 .align 4
 
+
+#define S3C2410_URXH      (0x24)
+#define S3C2410_UTXH      (0x20)
+#define S3C2410_ULCON     (0x00)
+#define S3C2410_UCON      (0x04)
+#define S3C2410_UFCON     (0x08)
+#define S3C2410_UMCON     (0x0C)
+#define S3C2410_UTRSTAT   (0x10)
+#define S3C2410_UERSTAT   (0x14)
+#define S3C2410_UFSTAT    (0x18)
+#define S3C2410_UMSTAT    (0x1C)
+#define S3C2410_UBRDIV    (0x28)
+#define S3C2410_UDIVSLOT  (0x2C)
+#define S3C2410_UINTMSK   (0x38)
+
+#define S3C2410_LCON_CFGMASK      ((0xF<<3)|(0x3))
+
+#define S3C2410_LCON_CS5      (0x0)
+#define S3C2410_LCON_CS6      (0x1)
+#define S3C2410_LCON_CS7      (0x2)
+#define S3C2410_LCON_CS8      (0x3)
+#define S3C2410_LCON_CSMASK   (0x3)
+
+#define S3C2410_LCON_PNONE    (0x0)
+#define S3C2410_LCON_PEVEN    (0x5 << 3)
+#define S3C2410_LCON_PODD     (0x4 << 3)
+#define S3C2410_LCON_PMASK    (0x7 << 3)
+
+#define S3C2410_LCON_STOPB    (1<<2)
+#define S3C2410_LCON_IRM          (1<<6)
+
+#define S3C2440_UCON_CLKMASK      (3<<10)
+#define S3C2440_UCON_PCLK     (0<<10)
+#define S3C2440_UCON_UCLK     (1<<10)
+#define S3C2440_UCON_PCLK2    (2<<10)
+#define S3C2440_UCON_FCLK     (3<<10)
+#define S3C2443_UCON_EPLL     (3<<10)
+#define S3C2410_UFCON_FIFOMODE    (1<<0)
+
+
+#define S3C2410_UFSTAT_TXFULL     (1<<24)
+#define S3C2410_UFSTAT_RXFULL     (1<<8)
+#define S3C2410_UFSTAT_TXMASK     (255<<16)
+#define S3C2410_UFSTAT_TXSHIFT    (16)
+#define S3C2410_UFSTAT_RXMASK     (255<<0)
+#define S3C2410_UFSTAT_RXSHIFT    (0)
+
+/* UFSTAT S3C2443 same as S3C2440 */
+#define S3C2440_UFSTAT_TXFULL     (1<<24)
+#define S3C2440_UFSTAT_RXFULL     (1<<8)
+#define S3C2440_UFSTAT_TXSHIFT    (16)
+#define S3C2440_UFSTAT_RXSHIFT    (0)
+#define S3C2440_UFSTAT_TXMASK     (255<<16)
+#define S3C2440_UFSTAT_RXMASK     (255)
+
+#define S3C2410_UTRSTAT_TXE   (1<<2)
+#define S3C2410_UTRSTAT_TXFE      (1<<1)
+#define S3C2410_UTRSTAT_RXDR      (1<<0)
+
+#define S3C2410_UERSTAT_OVERRUN   (1<<0)
+#define S3C2410_UERSTAT_FRAME     (1<<2)
+#define S3C2410_UERSTAT_BREAK     (1<<3)
+#define S3C2443_UERSTAT_PARITY    (1<<1)
+
+
+/* The S5PV210/S5PC110 implementations are as belows. */
+
+    .macro fifo_level_s5pv210 rd, rx
+        ldr \rd, [\rx, # S3C2410_UFSTAT]
+        and \rd, \rd, #S5PV210_UFSTAT_TXMASK
+    .endm
+
+    .macro  fifo_full_s5pv210 rd, rx
+        ldr \rd, [\rx, # S3C2410_UFSTAT]
+        tst \rd, #S5PV210_UFSTAT_TXFULL
+    .endm
+
+/* The S3C2440 implementations are used by default as they are the
+ * most widely re-used */
+
+    .macro fifo_level_s3c2440 rd, rx
+        ldr \rd, [\rx, # S3C2410_UFSTAT]
+        and \rd, \rd, #S3C2440_UFSTAT_TXMASK
+    .endm
+
+#ifndef fifo_level
+#define fifo_level fifo_level_s3c2440
+#endif
+
+    .macro  fifo_full_s3c2440 rd, rx
+        ldr \rd, [\rx, # S3C2410_UFSTAT]
+        tst \rd, #S3C2440_UFSTAT_TXFULL
+    .endm
+
+#ifndef fifo_full
+#define fifo_full fifo_full_s3c2440
+#endif
+    
+    .macro addruart, rx
+        ldr     \rx, =0x82500000
+    .endm
+
+    .macro  senduart,rd,rx
+        strb    \rd, [\rx, # S3C2410_UTXH]
+    .endm
+
+    .macro  busyuart, rd, rx
+        ldr \rd, [\rx, # S3C2410_UFCON]
+        tst \rd, #S3C2410_UFCON_FIFOMODE    @ fifo enabled?
+        beq 1001f               @
+        @ FIFO enabled...
+1003:
+        fifo_full \rd, \rx
+        bne 1003b
+        b   1002f
+
+1001:
+        @ busy waiting for non fifo
+        ldr \rd, [\rx, # S3C2410_UTRSTAT]
+        tst \rd, #S3C2410_UTRSTAT_TXFE
+        beq 1001b
+
+1002:       @ exit busyuart
+    .endm
+
+    .macro  waituart,rd,rx
+        ldr \rd, [\rx, # S3C2410_UFCON]
+        tst \rd, #S3C2410_UFCON_FIFOMODE    @ fifo enabled?
+        beq 1001f               @
+        @ FIFO enabled...
+1003:
+        fifo_level \rd, \rx
+        teq \rd, #0
+        bne 1003b
+        b   1002f
+1001:
+        @ idle waiting for non fifo
+        ldr \rd, [\rx, # S3C2410_UTRSTAT]
+        tst \rd, #S3C2410_UTRSTAT_TXFE
+        beq 1001b
+
+1002:       @ exit busyuart
+    .endm
+
 /**
  * ARM Vector Table
  *
@@ -82,14 +226,12 @@ _vectorTable:
 EnterARM(start)
     /* We are in supervisor, no interrupts. */
     cpsid   if, #0x13
-
+    
     /* Check sure we're at the right load address */
     ldr    r4, =_ExceptionVectorsBase
     adr    r5, _ExceptionVectorsBase
     cmp    r4, r5
     beq    L_relocated
-
-    /* We're not at the right load address, relocate ourselves to the right address. */
 
     /*
      * We should not trash the r0-r2 registers, but we don't guarantee that we won't
@@ -108,16 +250,6 @@ L_relocate_loop:
     bx     r4
 
 L_relocated:
-    /* Verify that things are defined properly. */
-    cmp     r2, #0
-    beq     lol_no_atags
-
-    /* Verify the tag header */
-    ldr     r4, =ATAG_CORE
-    ldr     r3, [r2, #4]
-    cmp     r3, r4
-    bne     lol_no_atags
-
     /*
      * Things look semi good, (we hope we're running at the right
      * text base, this is assumed.)
@@ -133,6 +265,62 @@ L_relocated:
 lol_no_atags:
     /* lol no atags */
     bl      _failure
+
+#define ENTRY(name) \
+    .globl name; \
+    .align 4 ; \
+    name: ;
+#define ENDPROC(name)
+
+/*
+ * Useful debugging routines
+ */
+ENTRY(printhex8)
+        mov r1, #8
+        b   printhex
+ENDPROC(printhex8)
+
+ENTRY(printhex4)
+        mov r1, #4
+        b   printhex
+ENDPROC(printhex4)
+
+ENTRY(printhex2)
+        mov r1, #2
+printhex:   adr r2, hexbuf
+        add r3, r2, r1
+        mov r1, #0
+        strb    r1, [r3]
+1:      and r1, r0, #15
+        mov r0, r0, lsr #4
+        cmp r1, #10
+        addlt   r1, r1, #'0'
+        addge   r1, r1, #'a' - 10
+        strb    r1, [r3, #-1]!
+        teq r3, r2
+        bne 1b
+        mov r0, r2
+        b   printascii
+ENDPROC(printhex2)
+
+ENTRY(printascii)
+        addruart r3
+        b   2f
+1:      waituart r2, r3
+        senduart r1, r3
+        busyuart r2, r3
+        teq r1, #'\n'
+        moveq   r1, #'\r'
+        beq 1b
+2:      teq r0, #0
+        ldrneb  r1, [r0], #1
+        teqne   r1, #0
+        bne 1b
+        mov pc, lr
+ENDPROC(printascii)
+
+
+hexbuf:     .space 16
 
 .text
 
