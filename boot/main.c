@@ -153,34 +153,6 @@ void machboot_main(struct atag *atags)
 
     bzero((void *)&gBootArgs, sizeof(boot_args));
 
-    /*
-     * Set up boot_args based on atag data, the rest will be filled out during
-     * initialization.
-     */
-    struct atag_header *atag_base = (struct atag_header *)atags;
-    uint32_t tag = atag_base->tag;
-
-    while (tag != ATAG_NONE) {
-        tag = atag_base->tag;
-
-        switch (tag) {
-        case ATAG_MEM:
-            populate_memory_info((struct atag *)atag_base);
-            break;
-        case ATAG_CMDLINE:
-            populate_commandline_info((struct atag *)atag_base);
-            break;
-        case ATAG_INITRD2:
-            populate_ramdisk_info((struct atag *)atag_base);
-            break;
-        default:
-            break;
-        }
-
-        atag_base =
-            (struct atag_header *)((uint32_t *) atag_base + (atag_base->size));
-    };
-
     /* Command prompt. */
     command_prompt();
 
@@ -198,8 +170,6 @@ void corestart_main(uint32_t __unused, uint32_t machine_type, struct atag *atags
 {
     /* We're in. */
     init_debug();
-
-    memset((void*)0x5f700000, 0xff, 640 * 960 * 2);
 
     /* Platform init. */
     init_platform();

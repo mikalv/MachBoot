@@ -69,6 +69,29 @@ int command_go(int argc, char* argv[])
     return 0;
 }
 
+int command_branch(int argc, char* argv[])
+{
+    uint32_t addr = 0;
+
+    if(argc != 1) {
+        printf("usage: %s <address>\n", argv[0]);
+        return -1;
+    }
+
+    addr = strtoul(argv[1], NULL, 16);
+
+    if(!permissions_range_check(addr)) {
+        printf("Permission Denied\n");
+        return -1;
+    }
+
+    printf("branching into image at 0x%08x\n", addr);
+
+    _locore_jump_to_fast((void (**)(void *, uint32_t))addr, 0);
+
+    return 0;
+}
+
 /* Memory read/write. */
 int command_mws(int argc, char* argv[])
 {
@@ -305,6 +328,123 @@ int command_hexdump(int argc, char* argv[]) {
         return 0;
 }
 
+#include "proc_reg.h"
+
+/* ARM processor support commands. */
+int command_regdump(int argc, char* argv[])
+{
+    uint32_t ttbr0, ttbr1, ttbcr, sctlr, actlr, midr;
+
+    ttbr0 = armreg_ttbr_read();
+    ttbr1 = armreg_ttbr1_read();
+    ttbcr = armreg_ttbcr_read();
+    sctlr = armreg_sctrl_read();
+    actlr = armreg_auxctl_read();
+    midr = armreg_midr_read();
+
+    printf("ARM coprocessor registers:\n"
+           "TTBR0:  0x%08x\n"
+           "TTBR1:  0x%08x\n"
+           "TTBCR:  0x%08x\n"
+           "SCTLR:  0x%08x\n"
+           "ACTLR:  0x%08x\n"
+           "MIDR:   0x%08x\n", ttbr0, ttbr1, ttbcr, sctlr, actlr, midr);
+
+    return 0;   /* Not reached. */
+}
+
+int command_va2pa(int argc, char* argv[])
+{
+    uint32_t pa, va;
+    if(argc != 1) {
+        printf("not enough arguments\n"
+               "usage: va2pa <address>\n");
+        return -1;
+    }
+
+    va = strtoul(argv[1], NULL, 16);
+
+    armreg_va2pa_pr_ns_write(va);
+    __asm__ __volatile__ ("isb sy");
+    pa = armreg_par_read();
+
+    printf("par: 0x%08x, %s\n", pa, (!(pa & 1)) ? "translation successful" : "translation not successful");
+    return 0;   /* Not reached. */
+}
+
+int command_tlbinval(int argc, char* argv[])
+{
+    __asm__ __volatile__("mov r0, #0; mcr p15, 0, r0, c8, c7, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... done\n");
+    return 0;   /* Not reached. */
+}
+
+int command_mmuen(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; orr r0, r0, #1; mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... enabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_mmudis(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; bic r0, r0, #1; mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... disabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_icacheen(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; orr r0, r0, #(1 << 12); mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... icache enabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_dcacheen(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; orr r0, r0, #(1 << 2); mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... dcache enabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_icachedis(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; bic r0, r0, #(1 << 12); mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... icache disabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_dcachedis(int argc, char* argv[])
+{
+    __asm__ __volatile__("mrc p15, 0, r0, c1, c0, 0; bic r0, r0, #(1 << 2); mcr p15, 0, r0, c1, c0, 0; isb sy; dsb sy; nop; nop;");
+
+    printf("... dcache disabled\n");
+    return 0;   /* Not reached. */
+}
+
+int command_ttbrset(int argc, char* argv[])
+{
+    uint32_t va;
+    if(argc != 1) {
+        printf("not enough arguments\n"
+               "usage: ttbrset <address>\n");
+        return -1;
+    }
+
+    va = strtoul(argv[1], NULL, 16);
+    armreg_ttbr_write(va);
+
+    printf("... ttbr set\n");
+
+    return 0;   /* Not reached. */
+}
+
 /* Bootx. */
 void *gKernelImage = NULL, *gDeviceTreeImage = NULL;
 uint32_t gKernelSize;
@@ -313,6 +453,7 @@ uint32_t gKernelSize;
 command_dispatch_t gDispatch[] = {
     {"help", command_help, "this list"},
     {"go", command_go, "jump directly to address"},
+    {"branch", command_branch, "branch directly to address (does not disable MMU/caches,etc)"},
     {"halt", command_halt, "halt the system (good for JTAG)"},
     {"mws", command_mws, "memory write - string"},
     {"mwb", command_mwb, "memory write - 8bit"},
@@ -324,6 +465,16 @@ command_dispatch_t gDispatch[] = {
     {"sha1", command_sha1, "SHA-1 hash of memory"},
     {"crc", command_crc, "POSIX 1003.2 checksum of memory"},
     {"hexdump", command_hexdump, "hex dump of memory"},
+    {"cpreg", command_regdump, "dump coprocessor registers"},
+    {"va2pa", command_va2pa, "convert virtual to physical address"},
+    {"tlbi", command_tlbinval, "invalidate unified tlb"},
+    {"mmudis", command_mmudis, "disable ARM MMU"},
+    {"mmuen", command_mmuen, "enable ARM MMU"},
+    {"ttbrset", command_ttbrset, "set TTBR base for MMU"},
+    {"icacheen", command_icacheen, "enable ARM instruction cache"},
+    {"icachedis", command_icachedis, "disable ARM instruction cache"},
+    {"dcacheen", command_dcacheen, "enable ARM data cache"},
+    {"dcachedis", command_dcachedis, "disable ARM data cache"},
     {NULL, NULL, NULL},
 };
 

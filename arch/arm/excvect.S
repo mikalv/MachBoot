@@ -38,25 +38,6 @@
  * Undefined instruction handler.
  */
 EnterARM(bleh_undef)
-    /* Supervisor. */
-    cpsid   i, #0x13
-    sub     sp, sp, #0x50
-    stmea   sp, {r0-r12}
-    str     lr, [sp, #0x38]
-    mov     r0, sp
-
-    /* Undefined. */
-    cpsid   i, #0x1b
-    mrs     r2, spsr 
-    str     lr, [r0, #0x3C]
-    str     r2, [r0, #0x40]
-
-    /* Supervisor again. */
-    cpsid   i, #0x13
-    add     r3, sp, #0x50
-    str     r3, [r0, #0x34]
-    blx     sleh_undef
-
     bl      _locore_halt_system
 
 /**
@@ -97,40 +78,6 @@ EnterARM(bleh_irq)
  * Prefetch abort handler.
  */
 EnterARM(bleh_prefabt)
-    /* Supervisor. */
-    cpsid   i, #0x13
-
-    /* Save registers. */
-    sub     sp, sp, #0x50
-    stmea   sp, {r0-r12}
-    str     lr, [sp, #0x38]
-    mov     r12, sp
-
-    /* Abort. */
-    cpsid   i, #0x17
-
-    /* Save more. */
-    str     lr, [r12, #0x3C]
-    str     lr, [r12, #0x48]
-
-    /* Save DFSR. */
-    mrc     p15, 0, r5, c5, c0, 0
-    str     r5, [r12, #0x44]
-
-    /* Save SPSR. */
-    mrs     r4, spsr
-    str     r4, [r12, #0x40]
-
-    /* supervisor */
-    cpsid	i, #0x13
-
-    add     r12, r12, #0x50
-    str     r12, [sp, #0x34]
-    sub     r12, r12, #0x50
-    mov     r0, sp
-    mov     r1, #3      /* Prefetch Abort */
-    bl      sleh_abort
-
     bl      _locore_halt_system
 
 /**
@@ -139,46 +86,6 @@ EnterARM(bleh_prefabt)
  * Data abort handler.
  */
 EnterARM(bleh_dataabt)
-    /* supervisor */
-    cpsid	i, #0x13
-    
-    /* make space on the stack for the registers. */
-    sub     sp, sp, #0x50
-    stmea   sp, {r0-r12}
-
-    /* Save the remaining registers. */
-    str     lr, [sp, #0x38]
-    mov     r12, sp
-
-    /* abort mode */
-    cpsid	i, #0x17
-
-    /* Save more registers */
-    str     lr, [r12, #0x3C]
-    mrs     r4, spsr
-    str     r4, [r12, #0x40]
-
-    /* supervisor */
-    cpsid	i, #0x13
-
-    /* Get DFSR */
-    mrc     p15, 0, r5, c5, c0, 0
-
-    /* Get FAR */
-    mrc     p15, 0, r6, c6, c0, 0
-
-    /* Save them on the stack */
-    str     r5, [sp, #0x44]
-    str     r6, [sp, #0x48]
-
-    /* Go to abort handler */
-    add     r12, r12, #0x50
-    str     r12, [sp, #0x34]
-    sub     r12, r12, #0x50
-    mov     r0, sp
-    mov     r1, #4      // Data Abort
-    bl      sleh_abort
-
     bl      _locore_halt_system
 
 /* Exception Stacks */

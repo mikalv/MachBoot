@@ -326,16 +326,7 @@ register const char *delim;
 
 char *strdup(const char *str)
 {
-    size_t len;
-    char *copy;
-
-    len = strlen(str) + 1;
-
-    if (!(copy = malloc(len)))
-        return NULL;
-
-    bcopy((void *)str, copy, len);
-    return copy;
+    return NULL;
 }
 
 void __assert(const char *filename, int linenumber, const char *assertion)

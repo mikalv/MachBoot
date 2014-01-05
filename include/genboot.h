@@ -86,6 +86,7 @@ extern void start_darwin(void);
 /* Kernel start routine */
 typedef void (*kernel_start) (void *bootArgs, uint32_t ttbr);
 extern void _locore_jump_to(kernel_start * startRoutine, void *bootArgs);
+extern void _locore_jump_to_fast(kernel_start * startRoutine, void *bootArgs);
 
 /* MMU initialization */
 extern void mmu_init(uint32_t ram_start, uint32_t ram_size, uint32_t booter_start, uint32_t ttb);

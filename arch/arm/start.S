@@ -226,7 +226,7 @@ _vectorTable:
 EnterARM(start)
     /* We are in supervisor, no interrupts. */
     cpsid   if, #0x13
-    
+
     /* Check sure we're at the right load address */
     ldr    r4, =_ExceptionVectorsBase
     adr    r5, _ExceptionVectorsBase
@@ -409,6 +409,25 @@ EnterARM(locore_jump_to)
     bx      lr  
   
 deadloop:
+    b       .
+
+
+/**
+ * locore_jump_to_fast
+ *
+ * Shut down the bootloader and start the new OS image. (no messing with anything)
+ */
+EnterARM(locore_jump_to_fast)
+    /* Disable interrupts */
+    cpsid   if, #0x13
+
+    mov     r9, r0
+    mov     lr, r9
+
+    mov     r0, r1
+    bx      lr  
+  
+deadloop2:
     b       .
 
 /**

@@ -19,13 +19,13 @@ export SYMROOT = $(SRCROOT)/Build/Symbols
 
 OBJECTS		= \
 	arch/arm/start.o arch/arm/excvect.o arch/arm/semihost.o \
-	arch/arm/proc-armv.o arch/arm/traps.o arch/arm/cswitch.o arch/arm/crt/bcopy.o \
+	arch/arm/proc-armv.o arch/arm/crt/bcopy.o \
 	arch/arm/crt/bzero.o arch/arm/crt/strchr.o arch/arm/crt/strcmp.o \
 	arch/arm/crt/strlen.o arch/arm/crt/strncmp.o \
-	arch/arm/thread.o arch/arm/crt/memset_pattern.o boot/main.o \
-	drivers/rv_uart.o lib/core/malloc.o lib/core/printf.o lib/core/tlsf.o \
+	arch/arm/crt/memset_pattern.o boot/main.o \
+	drivers/rv_uart.o lib/core/printf.o \
 	lib/crt/libc_stub.o lib/image3.o lib/macho_loader.o \
-	sys/debug.o sys/version.o sys/memory_region.o \
+	sys/debug.o sys/version.o \
 	boot/permissions.o boot/commands.o boot/parser.o \
 	drivers/rv_init.o lib/crc32.o lib/crypto/sha1.o \
 	lib/core/stack_protector.o
