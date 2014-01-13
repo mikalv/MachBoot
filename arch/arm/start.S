@@ -238,7 +238,7 @@ EnterARM(start)
      * overwrite the ATAGs.... (We probably won't anyway.)
      */
 
-    mov    r6, #(1 * 1024 * 1024)	// HACK
+    mov    r6, #(1 * 512 * 1024)	// HACK
 L_relocate_loop:
     ldr    r8, [r5], #4
     str    r8, [r4], #4
